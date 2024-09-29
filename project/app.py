@@ -45,6 +45,14 @@ def add_entry():
     flash('New entry was successfully posted')
     return redirect(url_for('index'))
 
+# SEARCH
+@app.route('/search/', methods=['GET'])
+def search():
+    query = request.args.get("query")
+    entries = db.session.query(models.Post)
+    if query:
+        return render_template('search.html', entries=entries, query=query)
+    return render_template('search.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
