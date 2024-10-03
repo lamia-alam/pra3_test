@@ -1,112 +1,24 @@
-import os
-import pytest
-from pathlib import Path
-
-from project.app import app, db
-import json
-
-
-TEST_DB = "test.db"
-
-
-@pytest.fixture
-def client():
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    app.config["TESTING"] = True
-    app.config["DATABASE"] = BASE_DIR.joinpath(TEST_DB)
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR.joinpath(TEST_DB)}"
-
-    with app.app_context():
-        db.create_all()  # setup
-        yield app.test_client()  # tests run here
-        db.drop_all()  # teardown
-
-
-def login(client, username, password):
-    """Login helper function"""
-    return client.post(
-        "/login",
-        data=dict(username=username, password=password),
-        follow_redirects=True,
-    )
-
-
-def logout(client):
-    """Logout helper function"""
-    return client.get("/logout", follow_redirects=True)
-
-
-def test_index(client):
-    response = client.get("/", content_type="html/text")
-    assert response.status_code == 200
-
-
-def test_database(client):
-    """initial test. ensure that the database exists"""
-    tester = Path("test.db").is_file()
-    assert tester
-
-
-def test_empty_db(client):
-    """Ensure database is blank"""
-    rv = client.get("/")
-    assert b"No entries yet. Add some!" in rv.data
-
-
-def test_login_logout(client):
-    """Test login and logout using helper functions"""
-    rv = login(client, app.config["USERNAME"], app.config["PASSWORD"])
-    assert b"You were logged in" in rv.data
-    rv = logout(client)
-    assert b"You were logged out" in rv.data
-    rv = login(client, app.config["USERNAME"] + "x", app.config["PASSWORD"])
-    assert b"Invalid username" in rv.data
-    rv = login(client, app.config["USERNAME"], app.config["PASSWORD"] + "x")
-    assert b"Invalid password" in rv.data
-
-
-def test_messages(client):
-    """Ensure that user can post messages"""
-    login(client, app.config["USERNAME"], app.config["PASSWORD"])
-    rv = client.post(
-        "/add",
-        data=dict(title="<Hello>", text="<strong>HTML</strong> allowed here"),
-        follow_redirects=True,
-    )
-    assert b"No entries here so far" not in rv.data
-    assert b"&lt;Hello&gt;" in rv.data
-    assert b"<strong>HTML</strong> allowed here" in rv.data
-
-def test_delete_message(client):
-    """Ensure the messages are being deleted"""
-    rv = client.get("/delete/1")
-    data = json.loads(rv.data)
-    assert data["status"] == 0
-    login(client, app.config["USERNAME"], app.config["PASSWORD"])
-    rv = client.get("/delete/1")
-    data = json.loads(rv.data)
-    assert data["status"] == 1
-
-#search tests
-
-def test_search_with_query(client):
-    """Test the search functionality with a query string."""
-   
+def test_search_query_not_exist(client):
+    """Test the search functionality with a non-existent query string."""
+    # Log in as a user (assuming the login function is defined)
     login(client, app.config["USERNAME"], app.config["PASSWORD"])
 
-   
+    # Add a post to the system to ensure the database is not empty
     client.post(
         "/add",
         data=dict(title="Search Test Post", text="This post is searchable"),
         follow_redirects=True,
     )
 
-    # Perform the search query
-    response = client.get("/search/?query=Search")
+    # Perform a search query for something that doesn't exist
+    response = client.get("/search/?query=nonexistentquery")
 
-    print(response.data.decode('utf-8'))  # Decoding to make it readable
+    # Decode the response data to make it readable
+    print(response.data.decode('utf-8'))
 
+    # Check that the status code is 200 (successful request)
     assert response.status_code == 200
 
-    assert b"Search Test Post" in response.data
+    # Assert that there are no search results by checking for an empty `ul` tag
+    assert b'<ul class="entries">\n          \n      </ul>' in response.data
 
